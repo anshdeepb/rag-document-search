@@ -1,11 +1,14 @@
 from openai import OpenAI
+from generation.query_modelling import model_query
 
 def query_vector_store(client, index, question):
     question = question
 
+    modelled_query = model_query(question)
+
     response = client.embeddings.create(
     model="text-embedding-3-small",
-    input=question
+    input=modelled_query
 )
 
     query_vector = response.data[0].embedding
@@ -18,5 +21,5 @@ def query_vector_store(client, index, question):
 
     query_response_dict = query_response.to_dict()
 
-    return query_response_dict
+    return modelled_query, query_response_dict
 
