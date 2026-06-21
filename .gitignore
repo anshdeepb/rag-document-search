@@ -1,0 +1,15 @@
+/.env
+
+__pycache__
+
+data/
+*.pdf
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+.venv/
+venv/
+ENV/

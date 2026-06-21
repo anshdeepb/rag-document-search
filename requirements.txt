@@ -1,0 +1,8 @@
+pinecone
+python-dotenv
+openai
+nltk
+cohere
+os
+langchain
+langchain-text-splitters
