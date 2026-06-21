@@ -97,21 +97,62 @@ User questions are transformed into retrieval-friendly search queries to improve
 
 Example:
 
-**User Question**
+<h1>RAG Document Search Example</h1>
 
-```text
-Which is better, greedy algorithms or dynamic programming?
-```
+<h2>User Query</h2>
+<p><strong>Which one is better, greedy algorithms or dynamic programming algorithms?</strong></p>
 
-**Generated Search Queries**
+<hr>
 
-```text
-greedy algorithm vs dynamic programming
-differences between greedy and dynamic programming
-advantages of greedy algorithms
-advantages of dynamic programming
-when to use greedy vs dynamic programming
-```
+<h2>System Output</h2>
+
+<h3>Comparison of Greedy Algorithms and Dynamic Programming</h3>
+<p>
+Greedy algorithms make a "greedy" choice first, selecting the option that appears best at the moment, and then solve the resulting subproblem.
+In contrast, dynamic programming finds optimal solutions to subproblems before making informed choices.
+</p>
+
+<h3>Advantages and Disadvantages of Greedy Algorithms vs Dynamic Programming</h3>
+
+<h4>Advantages of Greedy Algorithms:</h4>
+<ul>
+  <li>Often provides optimal solutions quickly for many problems.</li>
+  <li>Simple and easier to implement compared to dynamic programming.</li>
+</ul>
+
+<h4>Disadvantages of Greedy Algorithms:</h4>
+<ul>
+  <li>May not always yield optimal solutions for all problems.</li>
+  <li>Can lead to suboptimal choices if not carefully applied.</li>
+</ul>
+
+<h4>Advantages of Dynamic Programming:</h4>
+<ul>
+  <li>Guarantees optimal solutions by solving all related smaller subproblems.</li>
+</ul>
+
+<h4>Disadvantages of Dynamic Programming:</h4>
+<ul>
+  <li>Typically more complex and can be slower due to computing and storing multiple subproblem solutions.</li>
+</ul>
+
+<h3>Use Cases for Greedy Algorithms and Dynamic Programming</h3>
+<p>
+Greedy algorithms are suitable for optimization problems where local optimal choices lead to a global optimal solution.
+Dynamic programming is used when problems exhibit overlapping subproblems and optimal substructure, such as knapsack problems or shortest path problems.
+</p>
+
+<h3>When to Use Greedy Algorithms Over Dynamic Programming</h3>
+<ul>
+  <li>Use greedy algorithms when the problem can be solved optimally with local choices.</li>
+  <li>Use greedy algorithms when a faster solution is needed and the problem structure supports greedy strategies.</li>
+</ul>
+
+<h3>Performance Analysis</h3>
+<p>
+Greedy algorithms generally perform faster for problems where they are applicable because they avoid solving all subproblems.
+Dynamic programming is slower but guarantees optimal solutions by considering all subproblems.
+</p>
 
 ### 6. Retrieval
 
