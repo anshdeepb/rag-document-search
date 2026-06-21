@@ -95,6 +95,18 @@ Embeddings are stored in Pinecone for efficient similarity search.
 
 User questions are transformed into retrieval-friendly search queries to improve recall.
 
+### 6. Retrieval
+
+Relevant document chunks are retrieved from Pinecone.
+
+### 7. Reranking
+
+Retrieved chunks are reranked using Cohere to prioritize the most relevant context.
+
+### 8. Answer Generation
+
+The highest-ranked chunks are provided to an OpenAI model, which generates a grounded response using only the retrieved information.
+
 Example:
 
 <details>
@@ -133,18 +145,6 @@ Use greedy algorithms when:
 ### Performance Analysis of Greedy Algorithms Compared to Dynamic Programming
 Greedy algorithms generally perform better in terms of speed for problems where they work, as they make decisions without solving all subproblems. Dynamic programming, while potentially slower, ensures optimal solutions by considering all subproblems.
 </details>
-
-### 6. Retrieval
-
-Relevant document chunks are retrieved from Pinecone.
-
-### 7. Reranking
-
-Retrieved chunks are reranked using Cohere to prioritize the most relevant context.
-
-### 8. Answer Generation
-
-The highest-ranked chunks are provided to an OpenAI model, which generates a grounded response using only the retrieved information.
 
 ## Example Use Cases
 
