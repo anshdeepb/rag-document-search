@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from ingestion.pipeline import init_pipeline
-from chunking import create_chunks
-from embeddings import create_embeddings
-from vectorstore.pipeline import initialize_vector_store_pipeline
-from generation.pipeline import query_response_pipeline
+from src.ingestion.pipeline import init_pipeline
+from src.chunking import create_chunks
+from src.embeddings import create_embeddings
+from src.vectorstore.pipeline import initialize_vector_store_pipeline
+from src.generation.pipeline import query_response_pipeline
 
 def main():
     pdf_dir = Path(__file__).parent.parent / "data"
