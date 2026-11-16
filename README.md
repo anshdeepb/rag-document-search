@@ -1,178 +1,189 @@
-# RAG Document Search System
+# RAG Document Search
 
-## Overview
-
-This project is a Retrieval-Augmented Generation (RAG) system designed to answer questions from a collection of technical documents. The system combines semantic search, query rewriting, reranking, and large language models to provide accurate, context-grounded responses.
-
-Unlike a traditional chatbot, the system retrieves relevant information from a document corpus before generating an answer, reducing hallucinations and improving factual accuracy.
+A retrieval-augmented generation (RAG) system that answers questions over technical PDF documents with page-level citations. The retrieval pipeline is also exposed as a **Model Context Protocol (MCP) server**, so AI agents such as Claude Code, Claude Desktop, and Cursor can search the indexed documents as a tool.
 
 ## Features
 
-* PDF document ingestion and processing
-* Text chunking using LangChain
-* Embedding generation using OpenAI embeddings
-* Vector storage and retrieval with Pinecone
-* Query rewriting for improved retrieval performance
-* Semantic search over document collections
-* Cohere reranking for improved result relevance
-* Context-grounded answer generation using OpenAI models
-* Support for comparison, definition, and explanatory questions
+- **Multi-query retrieval:** an LLM rewrites each question into several search queries; each is searched separately and the results are merged and deduplicated
+- **Cohere reranking** against the user's original question
+- **Cited answers:** every passage carries its source file and page number, and generated answers cite pages
+- **MCP server:** a read-only `search_documents` tool that agents can call to retrieve cited passages
+- **Page-aware chunking:** ~800-character chunks with overlap, split at sentence boundaries and never crossing page boundaries, so citations stay accurate
+- **Fast startup:** ingestion is a separate, explicit step; querying connects to the existing index without re-processing documents
 
 ## Architecture
 
 ```text
-User Query
-    ↓
-Query Rewriter (OpenAI)
-    ↓
-Embedding Search (Pinecone)
-    ↓
-Top-K Retrieved Chunks
-    ↓
-Cohere Rerank
-    ↓
-Context Assembly
-    ↓
-OpenAI Response Generation
-    ↓
-Final Answer
+            ┌──────────────┐        ┌──────────────────────┐
+            │  CLI         │        │  MCP host            │
+            │  (main.py)   │        │  (Claude, Cursor…)   │
+            └──────┬───────┘        └──────────┬───────────┘
+                   │                           │ stdio
+                   │                ┌──────────▼───────────┐
+                   │                │  MCP server          │
+                   │                │  (mcp_server.py)     │
+                   │                └──────────┬───────────┘
+                   ▼                           ▼
+            ┌─────────────────────────────────────────────┐
+            │  Query pipeline (generation/)               │
+            │  1. Rewrite question into search queries    │
+            │  2. Embed each query                        │
+            │  3. Search Pinecone, merge + deduplicate    │
+            │  4. Rerank against the original question    │
+            │  5. Generate a cited answer (CLI only)      │
+            └──────────────────────┬──────────────────────┘
+                                   │
+                         Pinecone vector index
+                                   ▲
+            ┌──────────────────────┴──────────────────────┐
+            │  Ingestion (run manually)                   │
+            │  PDF → clean → chunk → embed → upsert       │
+            └─────────────────────────────────────────────┘
 ```
 
-## Motivation
+The CLI and the MCP server share the same pipeline modules, so there is a single implementation of retrieval.
 
-Traditional vector search systems often struggle when users phrase questions indirectly.
+## How Retrieval Works
 
-For example:
+| Stage | Implementation | Why |
+|---|---|---|
+| Query rewriting | `gpt-4o-mini` produces 2–5 search queries (the original question is always included) | Indirect or comparative questions often don't match document wording |
+| Embedding | OpenAI `text-embedding-3-small`, all queries in one request | One API call per question |
+| Search | Pinecone top-k per query; results merged by chunk id, keeping the best score | Broader recall without duplicate passages |
+| Reranking | Cohere `rerank-v3.5` against the **original** question | Rewritten queries help recall; the user's wording is the best target for precision |
+| Generation | `gpt-4o-mini` with source/page-labelled context; low-relevance chunks filtered out | Grounded answers with page citations |
 
-* "What is dynamic programming?" → usually retrieves relevant content.
-* "Which is better, greedy algorithms or dynamic programming?" → may fail because the retrieval query does not closely match document wording.
+## MCP Server
 
-To address this problem, the system includes a query rewriting stage that transforms user questions into retrieval-optimized search queries before searching the vector database.
+`app/mcp_server.py` exposes the retrieval pipeline to MCP-compatible agents over stdio.
 
-## Technology Stack
+| Tool | Input | Returns |
+|---|---|---|
+| `search_documents` | `query` (string), `top_n` (1–10, default 5) | Top reranked passages with `text`, `source`, `page`, `chunk_id`, `relevance_score` |
 
-### Backend
+The tool returns passages rather than a generated answer: the calling agent is already an LLM, so giving it the source text lets it reason over the evidence and cite pages directly.
 
-* Python
+### Connecting an agent
 
-### Retrieval & Vector Search
+Add the server to your MCP host's configuration. For Claude Code, create a `.mcp.json` in the project root (keep it out of version control, since it contains local paths):
 
-* Pinecone
-* OpenAI Embeddings
+```json
+{
+  "mcpServers": {
+    "rag-docs": {
+      "command": "/absolute/path/to/rag-document-search/.venv/bin/python",
+      "args": ["/absolute/path/to/rag-document-search/app/mcp_server.py"]
+    }
+  }
+}
+```
 
-### Language Models
+Claude Desktop uses the same `mcpServers` block in `claude_desktop_config.json`.
 
-* OpenAI GPT-4o Mini
+## Tech Stack
 
-### Reranking
+| Area | Tools |
+|---|---|
+| Language | Python 3.11+ |
+| Embeddings | OpenAI `text-embedding-3-small` |
+| Vector database | Pinecone (serverless) |
+| Reranking | Cohere `rerank-v3.5` |
+| Query rewriting & generation | OpenAI `gpt-4o-mini` |
+| Document processing | pypdf, NLTK, LangChain text splitters |
+| Agent integration | MCP Python SDK |
 
-* Cohere Rerank
+## Project Structure
 
-### Document Processing
+```text
+app/
+├── main.py                  # CLI: optional ingestion, then interactive Q&A
+├── mcp_server.py            # MCP server exposing search_documents
+├── chunking.py              # Page-bounded, sentence-aware chunking
+├── embeddings.py            # OpenAI client and batch embedding
+├── ingestion/               # PDF loading and text cleaning
+├── vectorstore/             # Pinecone index management and upserts
+└── generation/              # Query rewriting, retrieval, reranking, prompting, generation
+```
 
-* LangChain
-* PDF processing libraries
+## Getting Started
 
-## Workflow
+### Prerequisites
+- Python 3.11 or newer
+- API keys for OpenAI, Pinecone, and Cohere
 
-### 1. Document Ingestion
+### Installation
 
-Documents are loaded from PDF files and converted into text.
+```bash
+git clone https://github.com/anshdeepb/rag-document-search.git
+cd rag-document-search
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-### 2. Chunking
+> Virtual environments store absolute paths. If you move the project folder, delete `.venv` and recreate it.
 
-Large documents are split into smaller chunks to improve retrieval quality and embedding performance.
+### Configuration
 
-### 3. Embedding Generation
+Copy the example environment file and add your keys:
 
-Each chunk is converted into a vector embedding using OpenAI embedding models.
+```bash
+cp .env.example .env
+```
 
-### 4. Vector Storage
+```text
+OPENAI_API_KEY=
+PINECONE_API_KEY=
+COHERE_API_KEY=
+```
 
-Embeddings are stored in Pinecone for efficient similarity search.
+### Add documents
 
-### 5. Query Rewriting
+Place PDF files in `data/`. Source documents are not included in this repository.
 
-User questions are transformed into retrieval-friendly search queries to improve recall.
+### Ingest
 
-### 6. Retrieval
+```bash
+cd app
+python main.py      # answer "yes" to ingest
+```
 
-Relevant document chunks are retrieved from Pinecone.
+Ingestion creates the Pinecone index if it doesn't exist. If you change chunking or chunk ids, delete the index first; existing vectors with old ids are not overwritten.
 
-### 7. Reranking
+### Ask questions
 
-Retrieved chunks are reranked using Cohere to prioritize the most relevant context.
+```bash
+cd app
+python main.py      # answer "no" to skip ingestion
+```
 
-### 8. Answer Generation
+## Security & Privacy
 
-The highest-ranked chunks are provided to an OpenAI model, which generates a grounded response using only the retrieved information.
+- **Secrets:** API keys are read from `.env`, which is gitignored and must never be committed. `.env.example` lists variable names only.
+- **Least privilege:** use project-scoped API keys with spending limits or prepaid credits where providers support them.
+- **Read-only MCP surface:** the MCP server exposes search only. Ingestion and index writes are deliberately not available to agents, and `top_n` is bounded.
+- **No network listener:** the server communicates over stdio with the host process that launched it; it opens no ports.
+- **Minimal disclosure:** results include file names, not filesystem paths. Keys and source code are never sent to the agent, only tool results.
+- **Logging:** the server logs to stderr only (stdout carries the MCP protocol); passage contents are not logged.
+- **Third-party data flow:** document text and queries are sent to OpenAI, Pinecone, and Cohere, and tool results are sent to the MCP host's model provider. Don't index confidential documents unless that is acceptable under those providers' terms.
+- **Trusted content only:** retrieved text is placed into LLM prompts. Index only documents you trust, since untrusted documents could carry prompt-injection text.
+- **Dependencies:** versions are pinned in `requirements.txt`; apply security updates promptly.
 
-Example:
+## Limitations
 
-<details>
-<summary><strong>View Full RAG Pipeline Example</strong></summary>
+- Page numbers are PDF page indices, which may differ from the page numbers printed in a book.
+- Chunks do not span pages, so content that continues across a page break is split.
+- Sentence splitting uses NLTK's English models.
+- The MCP server is intended for local use; a remote deployment would require authentication, rate limiting, and TLS.
 
-### User Question
-Which is better, greedy algorithms or dynamic programming?
+## Roadmap
 
-### Final Answer
-### Comparison of Greedy Algorithms and Dynamic Programming
-Greedy algorithms make a "greedy" choice first, selecting the option that appears best at the moment, and then solve the resulting subproblem. In contrast, dynamic programming finds optimal solutions to subproblems before making informed choices.
+- Evaluation suite: a hand-labelled question set with retrieval recall@k and Ragas answer-quality metrics
+- `ask_documents` MCP tool returning a generated, cited answer
+- Hybrid search (vector + keyword)
+- Metadata filtering by document and section
+- Web interface
 
-### Advantages and Disadvantages of Greedy Algorithms vs Dynamic Programming
-**Advantages of Greedy Algorithms:**
-- Often provides optimal solutions quickly for many problems.
-- Simpler and easier to implement compared to dynamic programming.
+## License
 
-**Disadvantages of Greedy Algorithms:**
-- May not always yield optimal solutions for all problems.
-- Can lead to suboptimal choices if not carefully applied.
-
-**Advantages of Dynamic Programming:**
-- Guarantees optimal solutions by solving all related smaller subproblems.
-
-**Disadvantages of Dynamic Programming:**
-- Typically more complex and can be slower due to the need to compute and store multiple subproblem solutions.
-
-### Use Cases for Greedy Algorithms and Dynamic Programming
-Greedy algorithms are suitable for optimization problems where local optimal choices lead to a global optimal solution. Dynamic programming is employed in cases where problems exhibit overlapping subproblems and optimal substructure, such as in knapsack problems or shortest path problems.
-
-### When to Use Greedy Algorithms Over Dynamic Programming
-Use greedy algorithms when:
-- The problem can be solved optimally with local choices.
-- A faster solution is needed, and the problem structure supports greedy strategies.
-
-### Performance Analysis of Greedy Algorithms Compared to Dynamic Programming
-Greedy algorithms generally perform better in terms of speed for problems where they work, as they make decisions without solving all subproblems. Dynamic programming, while potentially slower, ensures optimal solutions by considering all subproblems.
-</details>
-
-## Example Use Cases
-
-* Educational document search
-* Technical knowledge bases
-* Course material assistants
-* Research document exploration
-* Internal company documentation search
-
-## Future Improvements
-
-* Hybrid search (vector + keyword search)
-* Metadata filtering
-* Source citation generation
-* Multi-document reasoning
-* Agentic query planning
-* Evaluation benchmark suite
-* Web interface deployment
-* Cloud deployment using AWS
-
-## Project Goals
-
-The primary goal of this project is to explore modern information retrieval techniques and build a production-style RAG pipeline that combines:
-
-* Semantic search
-* Query understanding
-* Retrieval optimization
-* Reranking
-* Grounded language generation
-
-This project demonstrates practical applications of large language models, vector databases, and retrieval systems in real-world software engineering workflows.
+Copyright © 2026 Anshdeep Bhachoo. All rights reserved. This is proprietary software; see [LICENSE](LICENSE) for terms.
