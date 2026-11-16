@@ -1,5 +1,6 @@
 from openai import OpenAI
 import os
+import json
 
 def model_query(question):
     client = OpenAI(
@@ -16,8 +17,9 @@ def model_query(question):
     - Do NOT answer the question
     - Do NOT explain anything
     - Output ONLY a JSON object
-    - Generate 3–6 queries maximum
-    - Make queries diverse (definitions, comparisons, use cases, tradeoffs)
+    - Generate 2–5 queries
+    - Cover different phrasings of what the user actually asked
+    - Only include comparisons or tradeoffs if the question asks for them
     - Prefer keyword-rich search-style phrases
 
     User question:
@@ -39,5 +41,18 @@ def model_query(question):
         temperature=0.2
     )
 
-    output = ai_response.output_text
-    return output
+    output = ai_response.output_text.strip()
+
+    # Models sometimes wrap JSON in ```json ... ``` fences
+    if output.startswith("```"):
+        output = output.strip("`")
+        output = output.removeprefix("json").strip()
+
+    try:
+        queries = json.loads(output)["queries"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        queries = []
+
+    # Always search with the original question too, and drop duplicates
+    all_queries = [question] + [q for q in queries if isinstance(q, str)]
+    return list(dict.fromkeys(all_queries))
