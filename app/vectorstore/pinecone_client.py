@@ -6,6 +6,7 @@ import time
 load_dotenv()
 
 environment = 'us-east-1'
+INDEX_NAME = "rag-pipeline-pdf-response"
 
 
 #configure client
@@ -23,10 +24,9 @@ def initialize_db(api_key):
 
     return index
 
-
 def create_index(pc, spec):
-    index_name = "rag-pipeline-pdf-response"
 
+    index_name = INDEX_NAME
     existing_indexes = [
     index_info["name"] for index_info in pc.list_indexes()
 ]
@@ -49,4 +49,15 @@ def create_index(pc, spec):
 
     index.describe_index_stats()
     return index
+
+def connect_to_existing_index(api_key):
+    pc = Pinecone(api_key=api_key)
+
+    existing = [info["name"] for info in pc.list_indexes()]
+    if INDEX_NAME not in existing:
+        raise RuntimeError(
+            f"Pinecone index '{INDEX_NAME}' not found. Run ingestion first"
+        )
+        
+    return pc.Index(INDEX_NAME)
 

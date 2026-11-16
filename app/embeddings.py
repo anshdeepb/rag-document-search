@@ -5,10 +5,13 @@ load_dotenv()
 
 from openai import OpenAI
 
-def create_embeddings(chunked_documents):
-    client = OpenAI(
+def get_openai_client():
+    return OpenAI(
         api_key=os.getenv("OPENAI_API_KEY")
     )
+
+def create_embeddings(chunked_documents):
+    client = get_openai_client()
 
     texts_to_embed = [chunk["text"] for chunk in chunked_documents]
 

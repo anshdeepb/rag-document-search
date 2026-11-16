@@ -2,11 +2,12 @@ from pathlib import Path
 
 from ingestion.pipeline import init_pipeline
 from chunking import create_chunks
-from embeddings import create_embeddings
-from vectorstore.pipeline import initialize_vector_store_pipeline
+from embeddings import create_embeddings, get_openai_client
+from vectorstore.pipeline import initialize_vector_store_pipeline, get_index
 from generation.pipeline import query_response_pipeline
 
-def main():
+
+def run_ingestion():
     pdf_dir = Path(__file__).parent.parent / "data"
     print("Ingestion in process.....")
 
@@ -14,31 +15,32 @@ def main():
     print("Loaded PDF.....")
     chunked_documents = create_chunks(sentences)
     print("Chunked Sentences.....")
-    client, embeddings = create_embeddings(chunked_documents)
-    print("Retrieved Embeddings.....")
+    _, embeddings = create_embeddings(chunked_documents)
+    print("Created Embeddings.....")
+    initialize_vector_store_pipeline(embeddings)
+    print("Stored Embeddings.....")
 
-    should_update_pinecone = input("Do you want to write the embeddings to the vector db (Only do this if you have ingested new data): ")
 
-    if(should_update_pinecone == "yes"):
+def main():
+    should_ingest = input(
+        "Do you want to ingest and write new embeddings to the vector db? (yes/no): "
+    )
+    if should_ingest.strip().lower() == "yes":
+        run_ingestion()
 
-        index = initialize_vector_store_pipeline(embeddings, True)
-        print("Stored Embeddings.....")
+    client = get_openai_client()
+    index = get_index()
+    print("Connected to vector store.....")
 
-    else:
-        index = initialize_vector_store_pipeline(embeddings, False)
-        print("Retrieved Embeddings.....")
-
-    question = ""
-    while(True):
+    while True:
         question = input("Ask your question or type 'end' to end the prompts: ")
         print()
 
-        if(question == "end"):
+        if question == "end":
             print("Bye Bye")
             break
 
         output = query_response_pipeline(client, index, question)
-
         print(output)
         print()
 

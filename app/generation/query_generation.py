@@ -1,25 +1,27 @@
 from openai import OpenAI
 from generation.query_modelling import model_query
 
-def query_vector_store(client, index, question):
-    question = question
+TOP_K_PER_QUERY = 30
 
-    modelled_query = model_query(question)
+def query_vector_store(client, index, question):
+    queries = model_query(question)
 
     response = client.embeddings.create(
-    model="text-embedding-3-small",
-    input=modelled_query
-)
+        model="text-embedding-3-small",
+        input=queries
+    )
 
-    query_vector = response.data[0].embedding
+    matches_by_id = {}
+    for item in response.data:
+        result = index.query(
+            vector=item.embedding,
+            top_k=TOP_K_PER_QUERY,
+            include_metadata=True
+        ).to_dict()
 
-    query_response = index.query(
-    vector=query_vector,
-    top_k=100,
-    include_metadata=True
-)
+        for match in result["matches"]:
+            existing = matches_by_id.get(match["id"])
+            if existing is None or match["score"] > existing["score"]:
+                matches_by_id[match["id"]] = match
 
-    query_response_dict = query_response.to_dict()
-
-    return modelled_query, query_response_dict
-
+    return queries, {"matches": list(matches_by_id.values())}
