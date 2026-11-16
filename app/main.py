@@ -11,10 +11,10 @@ def run_ingestion():
     pdf_dir = Path(__file__).parent.parent / "data"
     print("Ingestion in process.....")
 
-    sentences = init_pipeline(pdf_dir)
+    pages = init_pipeline(pdf_dir)
     print("Loaded PDF.....")
-    chunked_documents = create_chunks(sentences)
-    print("Chunked Sentences.....")
+    chunked_documents = create_chunks(pages)
+    print("Chunked Pages.....")
     _, embeddings = create_embeddings(chunked_documents)
     print("Created Embeddings.....")
     initialize_vector_store_pipeline(embeddings)
