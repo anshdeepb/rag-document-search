@@ -8,7 +8,7 @@ def load_pdfs(path):
 
     documents = []
 
-    for file in pdf_data.iterdir():
+    for file in sorted(pdf_data.glob("*.pdf")):
         reader = PdfReader(file)
 
         for i, page in enumerate(reader.pages):
@@ -19,7 +19,7 @@ def load_pdfs(path):
 
                 documents.append({
                 "text": text,
-                "source": str(file),
+                "source": file.name,
                 "page": i
             })
     return documents
