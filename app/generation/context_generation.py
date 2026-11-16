@@ -1,15 +1,13 @@
-def generate_context(question, results, documents_to_rerank):
+def generate_context(question, chunks):
     context_blocks = []
 
-    for result in results.results:
-        original_index = result.index
-        relevance_score = result.relevance_score
-
-        if relevance_score < 0.30:
+    for chunk in chunks:
+        if chunk["relevance_score"] < 0.30:
             continue
 
-        matching_text = documents_to_rerank[original_index]
-        context_blocks.append(f"--- Document Chunk ---\n{matching_text}\n")
+        context_blocks.append(
+            f"--- {chunk['source']}, page {chunk['page']} ---\n{chunk['text']}\n"
+        )
 
     context = "\n".join(context_blocks)
 
@@ -21,6 +19,7 @@ def generate_context(question, results, documents_to_rerank):
         - If the context is partially relevant, use what is available and clearly state limitations
         - If the context is missing some details, you may still reason carefully from what is provided
         - Only say "I don't know based on the provided documents" if the context is completely unrelated
+        - Cite the page for each claim, e.g. (p. 359)
 
         Context:
         {context}
